@@ -1,0 +1,56 @@
+[
+    {
+        "id": "template_example",
+        "user_id": "06dbe545-cdc6-43ea-bec6-16d732ad95d7",
+        "name": "Template Example",
+        "content": "\"\"\"\ntitle: OpenWebUI SSH Connection Manager (Async)\nauthor: Wes Caldwell\nemail: musicheardworldwide@gmail.com\nauthor_url: https://github.com/musicheardworldwide\nversion: 1.0.0\nlicense: MIT\ndescription: A structured Open WebUI tool that fetches the server's IP for testing purposes.\nrequirements:\n\"\"\"\n\nimport json\nimport logging\nimport traceback\nimport socket\nimport requests\nfrom typing import Optional, Callable, Any, Dict\nfrom pydantic import BaseModel, Field\nfrom fastapi import Request\nfrom open_webui.utils.chat import generate_chat_completion\nfrom open_webui.utils.misc import get_last_user_message\nfrom open_webui.models.users import User\n\n# Configure Logging\nlogger = logging.getLogger(__name__)\nif not logger.handlers:\n    handler = logging.StreamHandler()\n    handler.setFormatter(logging.Formatter(\"%(asctime)s - %(levelname)s - %(message)s\"))\n    logger.addHandler(handler)\nlogger.setLevel(logging.INFO)\n\n\n# Centralized Error Handling Function\ndef handle_error(exception: Exception, function_name: str, inputs: dict) -> dict:\n    \"\"\"\n    Handles errors and returns a structured response for OpenWebUI.\n\n    Args:\n        exception (Exception): The caught exception.\n        function_name (str): The name of the function where the error occurred.\n        inputs (dict): The original function inputs for debugging.\n\n    Returns:\n        dict: A structured error message to pass to OpenWebUI.\n    \"\"\"\n    error_message = str(exception)\n    stack_trace = traceback.format_exc()\n    logger.error(f\"Error in {function_name}: {error_message}\")\n    logger.debug(f\"Stack Trace:\\n{stack_trace}\")\n\n    return {\n        \"error\": True,\n        \"function\": function_name,\n        \"message\": error_message,\n        \"stack_trace\": stack_trace,\n        \"inputs\": inputs,\n        \"suggestion\": \"Check input values and ensure the correct API configurations.\",\n    }\n\n\n# Function to get IP addresses\ndef get_ip_addresses():\n    \"\"\"Retrieve both public and private IP addresses.\"\"\"\n    try:\n        # Get Private IP\n        private_ip = socket.gethostbyname(socket.gethostname())\n\n        # Get Public IP\n        response = requests.get(\"https://api.ipify.org?format=json\", timeout=5)\n        public_ip = response.json().get(\"ip\", \"Unknown\")\n\n        return {\"private_ip\": private_ip, \"public_ip\": public_ip}\n    except Exception as e:\n        logger.error(f\"IP Retrieval Error: {e}\")\n        return {\"private_ip\": \"Unknown\", \"public_ip\": \"Unknown\"}\n\n\n# Tool Definition\nclass Tools:\n    \"\"\"\n    OpenWebUI Tool with request handling, logging, and basic IP retrieval.\n    \"\"\"\n\n    class Config(BaseModel):\n        ENABLE_LOGGING: bool = Field(\n            default=True, description=\"Enable or disable logging for debugging\"\n        )\n\n    def __init__(self):\n        self.config = self.Config()\n\n    async def process_request(\n        self, query: str, __event_emitter__: Optional[Callable[[Any], Any]] = None\n    ) -> Dict:\n        \"\"\"\n        Simulated API request. Fetches server's IP instead.\n\n        Args:\n            query (str): The search query.\n            __event_emitter__ (Callable): Emits events back to OpenWebUI.\n\n        Returns:\n            Dict: API response containing IP addresses.\n        \"\"\"\n        try:\n            if __event_emitter__:\n                await __event_emitter__(\n                    {\n                        \"type\": \"status\",\n                        \"data\": {\"description\": \"Fetching server IP...\", \"done\": False},\n                    }\n                )\n\n            ip_info = get_ip_addresses()\n            logger.info(f\"Fetched IP Info: {ip_info}\")\n\n            response = {\n                \"status\": \"success\",\n                \"query\": query,\n                \"ip_info\": ip_info,\n            }\n\n            if __event_emitter__:\n                await __event_emitter__(\n                    {\n                        \"type\": \"status\",\n                        \"data\": {\"description\": \"IP retrieval complete.\", \"done\": True},\n                    }\n                )\n\n            return response\n\n        except Exception as e:\n            return handle_error(e, \"process_request\", {\"query\": query})\n\n    async def pipe(self, body: Dict, __user__: Dict, __request__: Request) -> Dict:\n        \"\"\"\n        Processes requests and injects IP information.\n\n        Args:\n            body (Dict): The request payload.\n            __user__ (Dict): User metadata.\n            __request__ (Request): FastAPI request object.\n\n        Returns:\n            Dict: Response with IP information.\n        \"\"\"\n        try:\n            logger.info(\"Processing request in Pipe...\")\n\n            messages = body.get(\"messages\", [])\n            if not messages:\n                return handle_error(ValueError(\"No input messages found\"), \"pipe\", body)\n\n            # Get IP Information\n            ip_info = get_ip_addresses()\n\n            # Modify Response\n            body[\"messages\"].append(\n                {\"role\": \"assistant\", \"content\": json.dumps({\"ip_info\": ip_info})}\n            )\n\n            return body\n\n        except Exception as e:\n            return handle_error(e, \"pipe\", body)\n\n\n# Example Usage\nif __name__ == \"__main__\":\n    tool = Tools()\n\n    async def test_tool():\n        response = await tool.process_request(\"Get IP\")\n        print(json.dumps(response, indent=4))\n\n    import asyncio\n\n    asyncio.run(test_tool())\n",
+        "specs": [
+            {
+                "name": "pipe",
+                "description": "Processes requests and injects IP information.\n\nArgs:\nbody (Dict): The request payload.\n__user__ (Dict): User metadata.\n__request__ (Request): FastAPI request object.\n\nReturns:\nDict: Response with IP information.",
+                "parameters": {
+                    "properties": {
+                        "body": {
+                            "type": "object"
+                        }
+                    },
+                    "required": [
+                        "body"
+                    ],
+                    "type": "object"
+                }
+            },
+            {
+                "name": "process_request",
+                "description": "Simulated API request. Fetches server's IP instead.\n\nArgs:\nquery (str): The search query.\n__event_emitter__ (Callable): Emits events back to OpenWebUI.\n\nReturns:\nDict: API response containing IP addresses.",
+                "parameters": {
+                    "properties": {
+                        "query": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "query"
+                    ],
+                    "type": "object"
+                }
+            }
+        ],
+        "meta": {
+            "description": "An example tool to build off of",
+            "manifest": {
+                "title": "OpenWebUI SSH Connection Manager (Async)",
+                "author": "Wes Caldwell",
+                "email": "musicheardworldwide@gmail.com",
+                "author_url": "https://github.com/musicheardworldwide",
+                "version": "1.0.0",
+                "license": "MIT",
+                "description": "A structured Open WebUI tool that fetches the server's IP for testing purposes.",
+                "requirements": ""
+            }
+        },
+        "access_control": null,
+        "updated_at": 1741797442,
+        "created_at": 1741783030
+    }
+]
