@@ -22,11 +22,6 @@ from typing import Optional, Callable, Any, Dict, List
 from pydantic import BaseModel, Field
 from fastapi import Request
 import asyncio
-from dotenv import load_dotenv
-import os
-
-# Load environment variables
-load_dotenv()
 
 # Configure Logging
 logger = logging.getLogger(__name__)
@@ -51,7 +46,16 @@ class Tools:
     - IP information retrieval
     - Basic command execution
     """
+    class Config(BaseModel):
+        ENABLE_LOGGING: bool = Field(
+            default=True, description="Enable or disable logging for debugging"
+        )
+        SSH_HOST: str = Field(default="localhost", description="SSH server host")
+        SSH_USER: str = Field(default="user", description="SSH username")
+        SSH_PASS: Optional[str] = Field(default=None, description="SSH password")
+
     def __init__(self):
+        self.config = self.Config()
         self.active_connections: Dict[str, paramiko.SSHClient] = {}
 
     async def get_ip_info(self) -> Dict:
@@ -150,9 +154,9 @@ class Tools:
                 # Parse connection details from message
                 # In a real implementation, you'd want proper parsing
                 connection = SSHConnection(
-                    host=os.getenv("SSH_HOST", "localhost"),
-                    username=os.getenv("SSH_USER", "user"),
-                    password=os.getenv("SSH_PASS"),
+                    host=self.config.SSH_HOST,
+                    username=self.config.SSH_USER,
+                    password=self.config.SSH_PASS,
                 )
                 if "test" in content.lower():
                     result = await self.test_ssh_connection(connection)
